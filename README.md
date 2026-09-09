@@ -1,1 +1,2 @@
-# cmsc128-Lab1_CRUD_Guevara
+# CMSC 128 Lab 1 - To-Do List CRUD App
+TODO: tech stack, setup, endpoints, screenshots
