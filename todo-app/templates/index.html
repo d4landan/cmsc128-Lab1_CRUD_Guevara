@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>To-Do List</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="page">
+
+    <header class="page-header">
+      <h1>To-Do List by Dan</h1>
+      <svg class="brand-underline" viewBox="0 0 220 12" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M2 8 C 40 2, 80 10, 120 5 S 190 3, 218 7" fill="none" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <p class="page-sub" id="todayDate"></p>
+    </header>
+
+    <section class="controls" aria-label="Filter and sort tasks">
+      <label class="control">
+        <span>Tag</span>
+        <select id="filterTag">
+          <option value="">All</option>
+          <option value="School">School</option>
+          <option value="Personal">Personal</option>
+          <option value="Others">Others</option>
+        </select>
+      </label>
+      <label class="control">
+        <span>Priority</span>
+        <select id="filterPriority">
+          <option value="">All</option>
+          <option value="High">High</option>
+          <option value="Med">Med</option>
+          <option value="Low">Low</option>
+        </select>
+      </label>
+      <label class="control">
+        <span>Sort by</span>
+        <select id="sortBy">
+          <option value="created_at">Date added</option>
+          <option value="due_date">Due date</option>
+          <option value="priority">Priority</option>
+          <option value="tag">Tag</option>
+        </select>
+      </label>
+    </section>
+
+    <form id="taskForm" class="task-form">
+      <input type="text" id="title" placeholder="Add task..." required>
+      <input type="datetime-local" id="dueDate" required>
+      <select id="priority">
+        <option value="Low">Low</option>
+        <option value="Med" selected>Med</option>
+        <option value="High">High</option>
+      </select>
+      <select id="tag">
+        <option value="School">School</option>
+        <option value="Personal">Personal</option>
+        <option value="Others">Others</option>
+      </select>
+      <button type="submit" id="formSubmitBtn">Add task</button>
+      <button type="button" id="cancelEditBtn" class="btn-ghost hidden">Cancel</button>
+    </form>
+
+    <ul id="taskList" class="task-list"></ul>
+    <p id="emptyState" class="empty-state hidden">Nothing here yet. Add your first task above.</p>
+  </div>
+
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-content">
+      <p>Delete this task?</p>
+      <div class="modal-actions">
+        <button id="cancelDeleteBtn" class="btn-ghost">Cancel</button>
+        <button id="confirmDeleteBtn" class="btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite">
+    <span id="toastMessage"></span>
+    <button id="toastUndoBtn" class="toast-undo hidden">Undo</button>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
