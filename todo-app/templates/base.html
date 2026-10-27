@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}To-Do List{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="page page-narrow">
+    <header class="page-header">
+      <h1><a class="brand-link" href="{{ url_for('index') }}">To-Do List</a></h1>
+      <svg class="brand-underline" viewBox="0 0 220 12" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M2 8 C 40 2, 80 10, 120 5 S 190 3, 218 7" fill="none" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <nav class="auth-nav">
+        {% if current_user.is_authenticated %}
+          <span class="auth-status">Signed in as <strong>{{ current_user.display_name }}</strong></span>
+          <a href="{{ url_for('auth.profile') }}">Profile</a>
+          <form action="{{ url_for('auth.logout') }}" method="POST" class="inline-form">
+            <button type="submit" class="link-btn">Log out</button>
+          </form>
+        {% else %}
+          <a href="{{ url_for('auth.login') }}">Log in</a>
+          <a href="{{ url_for('auth.register') }}">Sign up</a>
+        {% endif %}
+      </nav>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flash-list">
+          {% for category, message in messages %}
+            <li class="flash flash-{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

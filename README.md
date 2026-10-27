@@ -16,39 +16,31 @@ I chose SQLite because it is simple and it doesn't require a separate database s
 
 
 How to Run the App:
-1. Prerequisites
+1. Prerequisites<br>
 
-    Python Version 3
-    pip
-    flask
+    Python Version 3<br>
+    pip<br>
+    flask<br>   
 
 2. Clone the Project Repository
 
-4. Run the Application
+4. Run the Application<br>
     python app.py
 
-5. Open the Application
+5. Open the Application<br>
     Open a web browser and go to:
     http://127.0.0.1:5000/
 
 
-API Workflow
+API Workflow:
 
 1. User opens the application
-        ↓
 2. Frontend requests GET /api/tasks
-        ↓
 3. Flask retrieves tasks from SQLite
-        ↓
 4. Tasks are returned as JSON
-        ↓
 5. JavaScript displays the tasks
-        ↓
 6. User adds/edits/completes/deletes a task
-        ↓
 7. Frontend sends the appropriate API request
-        ↓
 8. Flask updates SQLite
-        ↓
 9. Frontend reloads the task list
 

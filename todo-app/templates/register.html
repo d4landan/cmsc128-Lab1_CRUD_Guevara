@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Sign up{% endblock %}
+{% block content %}
+  <div class="auth-card">
+    <h2>Create your account</h2>
+    <p class="auth-sub">Already have one? <a href="{{ url_for('auth.login') }}">Log in</a>.</p>
+
+    <form method="POST" class="auth-form" novalidate>
+      <label>
+        <span>Email</span>
+        <input type="email" name="email" value="{{ email or '' }}" required autofocus>
+      </label>
+      <label>
+        <span>Display name</span>
+        <input type="text" name="display_name" value="{{ display_name or '' }}" required>
+      </label>
+      <label>
+        <span>Password</span>
+        <input type="password" name="password" minlength="8" required>
+      </label>
+      <label>
+        <span>Confirm password</span>
+        <input type="password" name="confirm_password" minlength="8" required>
+      </label>
+      <p class="field-hint">At least 8 characters.</p>
+      <button type="submit" class="btn-primary">Create account</button>
+    </form>
+  </div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+  <div class="auth-card">
+    <h2>Hello, {{ current_user.display_name }}</h2>
+    <p class="auth-sub">Manage your account details below.</p>
+
+    <form method="POST" class="auth-form" novalidate>
+      <label>
+        <span>Email</span>
+        <input type="email" name="email" value="{{ current_user.email }}" required>
+      </label>
+      <label>
+        <span>Display name</span>
+        <input type="text" name="display_name" value="{{ current_user.display_name }}" required>
+      </label>
+
+      <hr class="field-divider">
+      <p class="field-hint">Leave the new password fields blank to keep your current password.</p>
+
+      <label>
+        <span>New password</span>
+        <input type="password" name="new_password" minlength="8">
+      </label>
+      <label>
+        <span>Confirm new password</span>
+        <input type="password" name="confirm_new_password" minlength="8">
+      </label>
+
+      <hr class="field-divider">
+      <label>
+        <span>Current password <small>(required to save any change)</small></span>
+        <input type="password" name="current_password" required>
+      </label>
+
+      <button type="submit" class="btn-primary">Save changes</button>
+    </form>
+  </div>
+{% endblock %}

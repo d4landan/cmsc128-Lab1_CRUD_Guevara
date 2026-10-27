@@ -1,5 +1,7 @@
-venv/
 __pycache__/
 *.pyc
 .env
+app.db
 tasks.db
+venv/
+.venv/
