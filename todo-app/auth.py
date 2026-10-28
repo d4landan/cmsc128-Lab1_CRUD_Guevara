@@ -1,3 +1,5 @@
+# All authentication routes 
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 
@@ -10,12 +12,22 @@ from werkzeug.security import check_password_hash
 
 auth_bp = Blueprint("auth", __name__)
 
-# Register
+
+def safe_next(url):
+    """Only follow a "?next=" address if it is a path on THIS site, such as "/".
+    Anything else ("https://evil.example", "//evil.example") is ignored, so the
+    login page can't be used to bounce people to another website."""
+    if url and url.startswith("/") and not url.startswith("//") and "\\" not in url:
+        return url
+    return None
+
+
+# Register 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     if current_user.is_authenticated:
-        return render_template('index.html')
+        return redirect(url_for("index"))
 
     if request.method == "POST":
         email = request.form.get("email", "").strip()
@@ -43,17 +55,17 @@ def register():
         user = create_user(email, display_name, password)
         login_user(user)
         flash("Account created. Welcome!", "success")
-        return redirect(url_for("auth.profile"))
+        return redirect(url_for("index"))      # Activity 3: straight to your To-Do list
 
     return render_template("register.html")
 
 
-# Login 
+# Login / logout
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return render_template('index.html')
+        return redirect(url_for("index"))
 
     if request.method == "POST":
         email = request.form.get("email", "").strip()
@@ -70,8 +82,8 @@ def login():
         # session cookie valid across browser restarts, not just refreshes.
         login_user(user, remember=True)
         flash(f"Welcome back, {user.display_name}.", "success")
-        next_url = request.args.get("next")
-        return render_template("index.html")
+        # Activity 3: straight to your To-Do list (or the page you were trying to open)
+        return redirect(safe_next(request.args.get("next")) or url_for("index"))
 
     return render_template("login.html")
 
@@ -142,9 +154,9 @@ def forgot_password():
                 user.id, current_app.config["RESET_TOKEN_MAX_AGE_MINUTES"]
             )
             reset_link = url_for("auth.reset_password", token=token, _external=True)
-            #  DEMO ONLY 
+            # DEMO ONLY 
+            # Password recovery
             current_app.logger.info("PASSWORD RESET LINK for %s: %s", user.email, reset_link)
-            
 
         # Same confirmation screen whether or not the email exists, so the
         # form can't be used to check who has an account.

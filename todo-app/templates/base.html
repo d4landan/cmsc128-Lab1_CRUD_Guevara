@@ -17,6 +17,7 @@
       <nav class="auth-nav">
         {% if current_user.is_authenticated %}
           <span class="auth-status">Signed in as <strong>{{ current_user.display_name }}</strong></span>
+          <a href="{{ url_for('index') }}">My tasks</a>
           <a href="{{ url_for('auth.profile') }}">Profile</a>
           <form action="{{ url_for('auth.logout') }}" method="POST" class="inline-form">
             <button type="submit" class="link-btn">Log out</button>

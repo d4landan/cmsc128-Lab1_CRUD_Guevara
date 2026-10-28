@@ -16,7 +16,7 @@ let toastTimer = null;
 let hiddenTaskIds = new Set();
 let currentTasks = [];
 
-// Helpers
+// Helpers 
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -54,7 +54,14 @@ if (todayDateEl) {
   });
 }
 
-// Data
+// Data loading
+
+// task requests goes through here 
+async function apiFetch(url, options) {
+  const res = await fetch(url, options);
+  if (res.status === 401) window.location.href = "/login";
+  return res;
+}
 
 function buildQuery() {
   const tag = document.getElementById("filterTag").value;
@@ -67,7 +74,8 @@ function buildQuery() {
 }
 
 async function loadTasks() {
-  const res = await fetch(`/api/tasks?${buildQuery()}`);
+  const res = await apiFetch(`/api/tasks?${buildQuery()}`);
+  if (!res.ok) return;
   currentTasks = await res.json();
   renderTasks(currentTasks);
 }
@@ -101,7 +109,7 @@ function renderTasks(tasks) {
   });
 }
 
-// Add/edit
+// Add / edit 
 
 taskForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -114,22 +122,24 @@ taskForm.addEventListener("submit", async (e) => {
 
   const isEditing = Boolean(taskForm.dataset.editingId);
 
-  if (isEditing) {
-    await fetch(`/api/tasks/${taskForm.dataset.editingId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    exitEditMode();
-    showToast("Task updated");
-  } else {
-    await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    showToast("Task added");
+  const res = isEditing
+    ? await apiFetch(`/api/tasks/${taskForm.dataset.editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+    : await apiFetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+  if (!res.ok) {
+    showToast("Couldn't save the task. Please try again.", { danger: true });
+    return;
   }
+  if (isEditing) exitEditMode();
+  showToast(isEditing ? "Task updated" : "Task added");
 
   taskForm.reset();
   document.getElementById("priority").value = "Med";
@@ -160,7 +170,7 @@ cancelEditBtn.addEventListener("click", () => {
   exitEditMode();
 });
 
-// Toggle/delete 
+// Toggle / delete
 
 taskList.addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-action]");
@@ -175,7 +185,7 @@ taskList.addEventListener("click", (e) => {
 });
 
 async function toggleTask(id) {
-  await fetch(`/api/tasks/${id}/toggle`, { method: "POST" });
+  await apiFetch(`/api/tasks/${id}/toggle`, { method: "POST" });
   loadTasks();
 }
 
@@ -198,12 +208,13 @@ document.getElementById("confirmDeleteBtn").onclick = () => {
 
   showToast("Task deleted", { undo: true, danger: true });
 
+  // 8 seconds undo
   undoTimer = setTimeout(async () => {
-    await fetch(`/api/tasks/${lastDeletedTask}`, { method: "DELETE" });
+    await apiFetch(`/api/tasks/${lastDeletedTask}`, { method: "DELETE" });
     hiddenTaskIds.delete(lastDeletedTask);
     hideToast();
     loadTasks();
-  }, 15000);
+  }, 8000);
 };
 
 toastUndoBtn.onclick = () => {

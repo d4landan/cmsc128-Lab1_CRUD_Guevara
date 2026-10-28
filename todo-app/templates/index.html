@@ -13,7 +13,7 @@
   <div class="page">
 
     <header class="page-header">
-      <h1>To-Do List by Dan</h1>
+      <h1>Today's list</h1>
       <svg class="brand-underline" viewBox="0 0 220 12" preserveAspectRatio="none" aria-hidden="true">
         <path d="M2 8 C 40 2, 80 10, 120 5 S 190 3, 218 7" fill="none" stroke-width="3" stroke-linecap="round"/>
       </svg>
@@ -21,6 +21,7 @@
       <nav class="auth-nav">
         {% if current_user.is_authenticated %}
           <span class="auth-status">Signed in as <strong>{{ current_user.display_name }}</strong></span>
+          <a href="{{ url_for('index') }}">My tasks</a>
           <a href="{{ url_for('auth.profile') }}">Profile</a>
           <form action="{{ url_for('auth.logout') }}" method="POST" class="inline-form">
             <button type="submit" class="link-btn">Log out</button>
@@ -41,7 +42,7 @@
         </ul>
       {% endif %}
     {% endwith %}
-    
+
     <section class="controls" aria-label="Filter and sort tasks">
       <label class="control">
         <span>Tag</span>
@@ -73,7 +74,7 @@
     </section>
 
     <form id="taskForm" class="task-form">
-      <input type="text" id="title" placeholder="Add task..." required>
+      <input type="text" id="title" placeholder="Enter task title" required>
       <input type="datetime-local" id="dueDate" required>
       <select id="priority">
         <option value="Low">Low</option>
@@ -90,7 +91,7 @@
     </form>
 
     <ul id="taskList" class="task-list"></ul>
-    <p id="emptyState" class="empty-state hidden">Nothing here yet. Add your first task above.</p>
+    <p id="emptyState" class="empty-state hidden">Add your first task above.</p>
   </div>
 
   <div id="confirmModal" class="modal hidden">
