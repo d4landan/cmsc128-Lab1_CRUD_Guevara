@@ -1,114 +1,89 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>To-Do List</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-  <div class="page">
+{% extends "base.html" %}
+{% block title %}My tasks{% endblock %}
+{% block page_class %}{% endblock %}
+{% block header_extra %}<p class="page-sub" id="todayDate"></p>{% endblock %}
 
-    <header class="page-header">
-      <h1>Today's list</h1>
-      <svg class="brand-underline" viewBox="0 0 220 12" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M2 8 C 40 2, 80 10, 120 5 S 190 3, 218 7" fill="none" stroke-width="3" stroke-linecap="round"/>
-      </svg>
-      <p class="page-sub" id="todayDate"></p>
-      <nav class="auth-nav">
-        {% if current_user.is_authenticated %}
-          <span class="auth-status">Signed in as <strong>{{ current_user.display_name }}</strong></span>
-          <a href="{{ url_for('index') }}">My tasks</a>
-          <a href="{{ url_for('auth.profile') }}">Profile</a>
-          <form action="{{ url_for('auth.logout') }}" method="POST" class="inline-form">
-            <button type="submit" class="link-btn">Log out</button>
-          </form>
-        {% else %}
-          <a href="{{ url_for('auth.login') }}">Log in</a>
-          <a href="{{ url_for('auth.register') }}">Sign up</a>
-        {% endif %}
-      </nav>
-    </header>
+{% block content %}
+  <section class="controls" aria-label="Filter and sort tasks">
+    <label class="control">
+      <span>Tag</span>
+      <select id="filterTag">
+        <option value="">All</option>
+        <option value="School">School</option>
+        <option value="Personal">Personal</option>
+        <option value="Others">Others</option>
+      </select>
+    </label>
+    <label class="control">
+      <span>Priority</span>
+      <select id="filterPriority">
+        <option value="">All</option>
+        <option value="High">High</option>
+        <option value="Med">Med</option>
+        <option value="Low">Low</option>
+      </select>
+    </label>
+    <label class="control">
+      <span>Sort by</span>
+      <select id="sortBy">
+        <option value="created_at">Date added</option>
+        <option value="due_date">Due date</option>
+        <option value="priority">Priority</option>
+        <option value="tag">Tag</option>
+      </select>
+    </label>
+  </section>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul class="flash-list">
-          {% for category, message in messages %}
-            <li class="flash flash-{{ category }}">{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
-
-    <section class="controls" aria-label="Filter and sort tasks">
-      <label class="control">
-        <span>Tag</span>
-        <select id="filterTag">
-          <option value="">All</option>
-          <option value="School">School</option>
-          <option value="Personal">Personal</option>
-          <option value="Others">Others</option>
-        </select>
-      </label>
-      <label class="control">
-        <span>Priority</span>
-        <select id="filterPriority">
-          <option value="">All</option>
-          <option value="High">High</option>
-          <option value="Med">Med</option>
-          <option value="Low">Low</option>
-        </select>
-      </label>
-      <label class="control">
-        <span>Sort by</span>
-        <select id="sortBy">
-          <option value="created_at">Date added</option>
-          <option value="due_date">Due date</option>
-          <option value="priority">Priority</option>
-          <option value="tag">Tag</option>
-        </select>
-      </label>
-    </section>
-
-    <form id="taskForm" class="task-form">
-      <input type="text" id="title" placeholder="Enter task title" required>
+  <form id="taskForm" class="task-form" data-no-lock aria-label="Add or edit a task">
+    <div class="task-field task-field-title">
+      <label for="title" class="visually-hidden">Task title</label>
+      <input type="text" id="title" placeholder="What do you need to do?" maxlength="200" required>
+    </div>
+    <div class="task-field">
+      <label for="dueDate" class="visually-hidden">Due date and time</label>
       <input type="datetime-local" id="dueDate" required>
+    </div>
+    <div class="task-field">
+      <label for="priority" class="visually-hidden">Priority</label>
       <select id="priority">
         <option value="Low">Low</option>
         <option value="Med" selected>Med</option>
         <option value="High">High</option>
       </select>
+    </div>
+    <div class="task-field">
+      <label for="tag" class="visually-hidden">Tag</label>
       <select id="tag">
         <option value="School">School</option>
         <option value="Personal">Personal</option>
         <option value="Others">Others</option>
       </select>
-      <button type="submit" id="formSubmitBtn">Add task</button>
-      <button type="button" id="cancelEditBtn" class="btn-ghost hidden">Cancel</button>
-    </form>
+    </div>
+    <button type="submit" id="formSubmitBtn" class="btn-primary">Add task</button>
+    <button type="button" id="cancelEditBtn" class="btn-ghost hidden">Cancel</button>
+  </form>
 
-    <ul id="taskList" class="task-list"></ul>
-    <p id="emptyState" class="empty-state hidden">Add your first task above.</p>
-  </div>
+  <p id="listStatus" class="empty-state" role="status">Loading your tasks…</p>
+  <ul id="taskList" class="task-list"></ul>
+{% endblock %}
 
-  <div id="confirmModal" class="modal hidden">
+{% block after_page %}
+  <div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirmMessage">
     <div class="modal-content">
-      <p>Delete this task?</p>
+      <p id="confirmMessage">Delete this task?</p>
       <div class="modal-actions">
-        <button id="cancelDeleteBtn" class="btn-ghost">Cancel</button>
-        <button id="confirmDeleteBtn" class="btn-danger">Delete</button>
+        <button type="button" id="confirmCancelBtn" class="btn-ghost">Cancel</button>
+        <button type="button" id="confirmOkBtn" class="btn-danger">Delete</button>
       </div>
     </div>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite">
     <span id="toastMessage"></span>
-    <button id="toastUndoBtn" class="toast-undo hidden">Undo</button>
+    <button type="button" id="toastUndoBtn" class="toast-undo hidden">Undo</button>
   </div>
+{% endblock %}
 
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
-</body>
-</html>
+{% block scripts %}
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+{% endblock %}

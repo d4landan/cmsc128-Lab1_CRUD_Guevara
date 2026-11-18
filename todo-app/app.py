@@ -1,57 +1,55 @@
-from datetime import timedelta
+import os
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
-from flask_login import LoginManager, current_user, login_required
+from flask_login import LoginManager, login_required
+from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import Config
-from database import get_db, init_db
+from database import init_db, close_db
 from models import get_user_by_id
 from auth import auth_bp
+from tasks import tasks_bp
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# The session cookie is signed with the SECRET_KEY
-app.permanent_session_lifetime = timedelta(days=7)
+if app.config["BEHIND_PROXY"]:
+    # Trust ONE proxy in front of us (ngrok / the host): use its X-Forwarded-* headers
+    # for the real scheme (https), host name and client address.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+app.teardown_appcontext(close_db)   # close this request's database connection
 init_db()
 
+
+# login
+
 login_manager = LoginManager()
-login_manager.login_view = "auth.login"
 login_manager.login_message = "Please log in to continue."
 login_manager.login_message_category = "error"
 login_manager.init_app(app)
 
 
+@login_manager.user_loader
+def load_user(user_id):
+    # Runs on every request that carries a login cookie: turns the user id stored
+    # in the signed cookie into a real user from the database.
+    return get_user_by_id(user_id)
+
+
 @login_manager.unauthorized_handler
 def unauthorized():
-    # Runs when @login_required fails
-    # API calls get a JSON 401, while page requests get redirected to the login page
+    # A login-protected route was reached without logging in.
+    # API calls get JSON 401 (the page's JavaScript handles it); pages go to the login form.
     if request.path.startswith("/api/"):
         return jsonify({"error": "Not logged in."}), 401
     flash(login_manager.login_message, login_manager.login_message_category)
     return redirect(url_for("auth.login", next=request.path))
 
 
-@login_manager.user_loader
-def load_user(user_id):
-    # Called on every request for a logged-in user: Flask-Login decodes the
-    # signed session cookie to get this id, then we re-fetch the fresh row
-    # from the DB rather than trusting any user data cached in the cookie.
-    return get_user_by_id(user_id)
-
-
 app.register_blueprint(auth_bp)
-
-
-#  To-Do List  
-
-def current_user_id():
-    return int(current_user.id)
-
-
-def not_found():
-    return jsonify({"error": "Not found."}), 404
+app.register_blueprint(tasks_bp)
 
 
 @app.route("/")
@@ -60,97 +58,67 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/api/tasks", methods=["GET"])
-@login_required
-def get_tasks():
-    sort_by = request.args.get("sort_by", "created_at")
-    tag = request.args.get("tag")
-    priority = request.args.get("priority")
+# error handling 
+# Visitors never see a raw error page or a stack trace. API calls get JSON,
+# pages get a friendly screen with a way out. The details go to the server log.
 
-    allowed_sorts = {"created_at", "due_date", "priority", "tag"}
-    if sort_by not in allowed_sorts:
-        sort_by = "created_at"
-
-    query = "SELECT * FROM tasks WHERE user_id = ?"
-    params = [current_user_id()]
-    if tag:
-        query += " AND tag = ?"
-        params.append(tag)
-    if priority:
-        query += " AND priority = ?"
-        params.append(priority)
-    query += f" ORDER BY {sort_by}"
-
-    conn = get_db()
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in rows])
+MESSAGES = {
+    404: ("Page not found", "We couldn't find that page. It may have moved, or the address may be wrong."),
+    405: ("Not allowed", "That action isn't allowed on this page."),
+    413: ("Request too large", "That request was too large to process."),
+    429: ("Slow down a little", "Too many requests. Please wait a moment and try again."),
+}
 
 
-@app.route("/api/tasks", methods=["POST"])
-@login_required
-def create_task():
-    data = request.get_json()
-    conn = get_db()
-    # user_id is NOT read from the request: the new task is owned by whoever is logged in
-    conn.execute(
-        "INSERT INTO tasks (title, due_date, priority, tag, user_id) VALUES (?, ?, ?, ?, ?)",
-        (data["title"], data["due_date"], data["priority"], data["tag"], current_user_id()),
-    )
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "created"}), 201
+def error_response(code, title, message):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": message}), code
+    return render_template("error.html", code=code, title=title, message=message), code
 
 
-@app.route("/api/tasks/<int:task_id>", methods=["PUT"])
-@login_required
-def update_task(task_id):
-    data = request.get_json()
-    conn = get_db()
-    # "AND user_id = ?" is the ownership check
-    cur = conn.execute(
-        "UPDATE tasks SET title=?, due_date=?, priority=?, tag=? WHERE id=? AND user_id=?",
-        (data["title"], data["due_date"], data["priority"], data["tag"], task_id, current_user_id()),
-    )
-    conn.commit()
-    changed = cur.rowcount
-    conn.close()
-    if changed == 0:
-        return not_found()
-    return jsonify({"status": "updated"})
+@app.errorhandler(HTTPException)
+def handle_http_error(error):
+    code = error.code or 500
+    title, message = MESSAGES.get(code, ("Something went wrong", "Sorry, that request couldn't be completed."))
+    return error_response(code, title, message)
 
 
-@app.route("/api/tasks/<int:task_id>/toggle", methods=["POST"])
-@login_required
-def toggle_task(task_id):
-    conn = get_db()
-    cur = conn.execute(
-        "UPDATE tasks SET done = NOT done WHERE id=? AND user_id=?",
-        (task_id, current_user_id()),
-    )
-    conn.commit()
-    changed = cur.rowcount
-    conn.close()
-    if changed == 0:
-        return not_found()
-    return jsonify({"status": "toggled"})
+@app.errorhandler(500)
+def handle_server_error(error):
+    app.logger.exception("Unhandled error on %s %s", request.method, request.path)
+    return error_response(500, "Something went wrong", "Sorry, something broke on our side. Please try again in a moment.")
 
 
-@app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
-@login_required
-def delete_task(task_id):
-    conn = get_db()
-    cur = conn.execute(
-        "DELETE FROM tasks WHERE id=? AND user_id=?",
-        (task_id, current_user_id()),
-    )
-    conn.commit()
-    changed = cur.rowcount
-    conn.close()
-    if changed == 0:
-        return not_found()
-    return jsonify({"status": "deleted"})
+# response headers 
+
+CSP = (
+    "default-src 'self'; "
+    "style-src 'self' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "script-src 'self'; "
+    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+)
+
+
+@app.after_request
+def add_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"        # don't guess file types
+    response.headers["X-Frame-Options"] = "DENY"                  # can't be put in someone else's <iframe>
+    response.headers["Referrer-Policy"] = "same-origin"
+    # Only our own scripts may run, so an injected <script> or onerror= would not execute.
+    response.headers["Content-Security-Policy"] = CSP
+    if request.path.startswith("/api/"):
+        # Back after logout must not redisplay a cached copy of private data.
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # debug=True runs an interactive debugger that lets anyone who reaches it run
+    # code on your computer. It is OFF unless you ask: set FLASK_DEBUG=1 in .env.
+    app.run(
+        host=os.environ.get("HOST", "127.0.0.1"),
+        port=int(os.environ.get("PORT", "5000")),
+        debug=os.environ.get("FLASK_DEBUG") == "1",
+    )

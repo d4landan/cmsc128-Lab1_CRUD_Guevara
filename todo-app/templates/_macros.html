@@ -1,0 +1,35 @@
+{# One form field = label + input + hint + inline error, wired together for screen readers.
+   Used by every form so they all look and behave the same. #}
+{% macro field(name, label, type="text", value="", error=None, hint=None, autocomplete=None,
+               required=True, minlength=None, maxlength=None, autofocus=False) -%}
+<div class="field">
+  <label for="{{ name }}">{{ label }}</label>
+  <input id="{{ name }}" name="{{ name }}" type="{{ type }}"
+         {%- if type != "password" %} value="{{ value or '' }}"{% endif %}
+         {%- if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}
+         {%- if required %} required{% endif %}
+         {%- if minlength %} minlength="{{ minlength }}"{% endif %}
+         {%- if maxlength %} maxlength="{{ maxlength }}"{% endif %}
+         {%- if autofocus %} autofocus{% endif %}
+         {%- if error %} aria-invalid="true"{% endif %}
+         {%- if hint or error %} aria-describedby="{% if hint %}{{ name }}-hint{% endif %}{% if hint and error %} {% endif %}{% if error %}{{ name }}-error{% endif %}"{% endif %}>
+  {%- if hint %}
+  <p class="field-hint" id="{{ name }}-hint">{{ hint }}</p>
+  {%- endif %}
+  {%- if error %}
+  <p class="field-error" id="{{ name }}-error">{{ error }}</p>
+  {%- endif %}
+</div>
+{%- endmacro %}
+
+{# "Show password" checkbox: forms.js reveals/hides every password box in the same form. #}
+{% macro show_password() -%}
+<label class="show-password">
+  <input type="checkbox" data-show-password> Show password
+</label>
+{%- endmacro %}
+
+{# A form-level error (not tied to one field), e.g. "Incorrect email or password." #}
+{% macro form_error(message) -%}
+{% if message %}<p class="form-error" role="alert">{{ message }}</p>{% endif %}
+{%- endmacro %}

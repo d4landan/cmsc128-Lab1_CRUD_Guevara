@@ -3,28 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}To-Do List{% endblock %}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#2B6E64">
+  <title>{% block title %}To-Do List{% endblock %} | To-Do List</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232B6E64'/%3E%3Cpath d='M8 17l5 5 11-12' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="page page-narrow">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="page {% block page_class %}page-narrow{% endblock %}">
     <header class="page-header">
-      <h1><a class="brand-link" href="{{ url_for('index') }}">To-Do List</a></h1>
+      <h1><a class="brand-link" href="{{ url_for('index') }}">Today's list</a></h1>
       <svg class="brand-underline" viewBox="0 0 220 12" preserveAspectRatio="none" aria-hidden="true">
         <path d="M2 8 C 40 2, 80 10, 120 5 S 190 3, 218 7" fill="none" stroke-width="3" stroke-linecap="round"/>
       </svg>
-      <nav class="auth-nav">
+      {% block header_extra %}{% endblock %}
+      <nav class="auth-nav" aria-label="Account">
         {% if current_user.is_authenticated %}
           <span class="auth-status">Signed in as <strong>{{ current_user.display_name }}</strong></span>
-          <a href="{{ url_for('index') }}">My tasks</a>
-          <a href="{{ url_for('auth.profile') }}">Profile</a>
+          <a href="{{ url_for('index') }}"{% if request.endpoint == 'index' %} aria-current="page"{% endif %}>My tasks</a>
+          <a href="{{ url_for('auth.profile') }}"{% if request.endpoint == 'auth.profile' %} aria-current="page"{% endif %}>Profile</a>
           <form action="{{ url_for('auth.logout') }}" method="POST" class="inline-form">
-            <button type="submit" class="link-btn">Log out</button>
+            <button type="submit" class="link-btn" data-loading="Logging out…">Log out</button>
           </form>
         {% else %}
-          <a href="{{ url_for('auth.login') }}">Log in</a>
-          <a href="{{ url_for('auth.register') }}">Sign up</a>
+          <a href="{{ url_for('auth.login') }}"{% if request.endpoint == 'auth.login' %} aria-current="page"{% endif %}>Log in</a>
+          <a href="{{ url_for('auth.register') }}"{% if request.endpoint == 'auth.register' %} aria-current="page"{% endif %}>Sign up</a>
         {% endif %}
       </nav>
     </header>
@@ -33,13 +40,19 @@
       {% if messages %}
         <ul class="flash-list">
           {% for category, message in messages %}
-            <li class="flash flash-{{ category }}">{{ message }}</li>
+            <li class="flash flash-{{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</li>
           {% endfor %}
         </ul>
       {% endif %}
     {% endwith %}
 
-    {% block content %}{% endblock %}
+    <main id="main" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
   </div>
+
+  {% block after_page %}{% endblock %}
+  <script src="{{ url_for('static', filename='forms.js') }}" defer></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

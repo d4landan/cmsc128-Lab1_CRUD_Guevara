@@ -3,13 +3,18 @@
   --paper-line: #DAD5C7;
   --card: #FFFFFF;
   --ink: #24272B;
-  --ink-soft: #6B6F73;
+  --ink-soft: #5A5E62;      /* was #6B6F73: 4.20:1 on paper, now 5.42:1 */
   --accent: #2B6E64;
   --accent-soft: #DCE9E6;
   --high: #BF4C3C;
   --med: #C98A2E;
   --low: #5C8863;
-  --danger: #B3402F;
+  --danger: #A63A2A;        /* was #B3402F: 4.43:1 on the error box, now 5.01:1 */
+  /* Colours for priority TEXT (the coloured bars keep the brighter tones above):
+     Med was 2.93:1 and Low 4.07:1 on white, both below the 4.5:1 minimum. */
+  --high-text: #B3402F;
+  --med-text: #8A5A06;
+  --low-text: #3F7048;
   --shadow: rgba(36, 39, 43, 0.10);
   --radius: 10px;
 }
@@ -42,6 +47,20 @@ body {
   font-size: 38px;
   margin: 0;
   letter-spacing: -0.01em;
+}
+
+.brand-underline {
+  width: 160px;
+  height: 10px;
+  display: block;
+  margin: 2px 0 6px;
+}
+
+.brand-underline path {
+  stroke: var(--accent);
+  stroke-dasharray: 260;
+  stroke-dashoffset: 260;
+  animation: draw-underline 0.9s ease-out 0.15s forwards;
 }
 
 @keyframes draw-underline {
@@ -116,7 +135,7 @@ input:focus {
   color: var(--ink);
 }
 
-.task-form input[type="text"] {
+.task-form .task-field-title input {
   flex: 1 1 200px;
 }
 
@@ -227,9 +246,9 @@ input:focus {
   background: currentColor;
 }
 
-.task-item.priority-high .priority-label { color: var(--high); }
-.task-item.priority-med  .priority-label { color: var(--med); }
-.task-item.priority-low  .priority-label { color: var(--low); }
+.task-item.priority-high .priority-label { color: var(--high-text); }
+.task-item.priority-med  .priority-label { color: var(--med-text); }
+.task-item.priority-low  .priority-label { color: var(--low-text); }
 
 .task-actions {
   flex: none;
@@ -292,14 +311,18 @@ input:focus {
 }
 
 .btn-ghost {
+  display: inline-block;
   background: transparent;
   border: 1px solid var(--paper-line);
   color: var(--ink);
   border-radius: 7px;
   padding: 8px 14px;
+  font-family: "Work Sans", sans-serif;
   font-size: 14px;
+  text-decoration: none;
   cursor: pointer;
 }
+.btn-ghost:hover { border-color: var(--accent); }
 
 .btn-danger {
   background: var(--danger);
@@ -311,6 +334,7 @@ input:focus {
   cursor: pointer;
 }
 
+/* Toast */
 .toast {
   position: fixed;
   bottom: 24px;
@@ -349,7 +373,7 @@ input:focus {
   .task-actions { margin-left: 40px; }
 }
 
-/* Act 2 */
+/* ---------------------------------------------------------- Auth (Act 2) */
 
 .page-narrow { max-width: 480px; }
 
@@ -401,9 +425,9 @@ input:focus {
 
 .auth-form { display: flex; flex-direction: column; gap: 14px; }
 
-.auth-form label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 500; color: var(--ink-soft); }
+.auth-form label { font-size: 13px; font-weight: 500; color: var(--ink); }
 
-.auth-form input {
+.auth-form input:not([type="checkbox"]) {
   font-family: "Work Sans", sans-serif;
   font-size: 14px;
   padding: 10px 12px;
@@ -449,3 +473,123 @@ input:focus {
   word-break: break-all;
 }
 .demo-box a { color: var(--accent); }
+
+
+/* ======================================================== Lab 4: refinement === */
+
+/* ---- accessibility basics ---- */
+::placeholder { color: #5F6368; opacity: 1; }   /* the browser default is 3.82:1 on paper; this is 5.02:1 */
+
+a:focus-visible, button:focus-visible, summary:focus-visible,
+select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+main:focus { outline: none; }
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 50;
+  padding: 10px 16px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 0 0 8px 8px;
+  text-decoration: none;
+}
+.skip-link:focus { top: 0; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- one look for every form field ---- */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field input[aria-invalid="true"] { border-color: var(--danger); background: #FBEFED; }
+.field-error { margin: 0; font-size: 13px; font-weight: 500; color: var(--danger); }
+.field-hint { margin: 0; }
+
+.form-error {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--danger);
+  background: #F5DEDA;
+  border-left: 4px solid var(--danger);
+  border-radius: 7px;
+}
+
+.field-group {
+  border: 1px solid var(--paper-line);
+  border-radius: 8px;
+  padding: 14px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.field-group legend { padding: 0 6px; font-size: 13px; font-weight: 500; }
+.field-group legend small { color: var(--ink-soft); font-weight: 400; }
+
+.show-password {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.show-password input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.auth-foot { margin: 18px 0 0; }
+.form-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.btn-link { display: inline-block; text-decoration: none; }
+.btn-primary:disabled, .task-form button:disabled { opacity: 0.65; cursor: progress; }
+
+/* ---- error page ---- */
+.error-card { text-align: center; }
+.error-code {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+/* ---- the add-task form: each control has its own cell ---- */
+.task-form .task-field { flex: 1 1 130px; min-width: 0; }
+.task-form .task-field-title { flex: 3 1 220px; }
+.task-form .task-field input,
+.task-form .task-field select { width: 100%; }
+
+/* ---- phones and touch screens ---- */
+@media (pointer: coarse) {
+  /* Fingers need bigger targets than a mouse pointer (aim for about 44px). */
+  .btn-icon, .link-btn, .btn-ghost, .btn-primary, .btn-danger,
+  .task-form input, .task-form select, .task-form button,
+  .auth-form input:not([type="checkbox"]), .control select { min-height: 44px; }
+  .btn-icon { padding: 10px 12px; }
+  .check-btn { width: 36px; height: 36px; }
+  .auth-nav { gap: 20px; }
+  .auth-nav a, .link-btn { padding: 8px 0; }
+}
+
+@media (max-width: 480px) {
+  body { padding: 28px 14px 80px; }
+  .controls { gap: 8px; }
+  .toast { left: 14px; right: 14px; transform: none; justify-content: space-between; }
+}
+
+/* ---- respect people who ask their device to cut down on motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .brand-underline path { animation: none; stroke-dashoffset: 0; }
+  * { transition: none !important; }
+}

@@ -27,6 +27,13 @@ After merging, the task table and routes were still shared by everyone
 
 
 # Schema
+users                                  tasks
+─────────────────────────              ───────────────────────────────────
+id            PK            ◄───────   user_id   NOT NULL  FK → users.id
+email                                  id        PK
+display_name                           title, due_date, priority, tag, done, created_at
+password_hash  
+created_at
 
 One user has many tasks, each task has exactly one owner.
 

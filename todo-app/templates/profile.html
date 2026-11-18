@@ -1,39 +1,29 @@
 {% extends "base.html" %}
+{% from "_macros.html" import field, show_password, form_error %}
+{% set errors = errors or {} %}
 {% block title %}Profile{% endblock %}
 {% block content %}
   <div class="auth-card">
     <h2>Hello, {{ current_user.display_name }}</h2>
-    <p class="auth-sub">Manage your account details below.</p>
+    <p class="auth-sub">Update your account details. Changes are saved only when you press <strong>Save changes</strong>.</p>
 
-    <form method="POST" class="auth-form" novalidate>
-      <label>
-        <span>Email</span>
-        <input type="email" name="email" value="{{ current_user.email }}" required>
-      </label>
-      <label>
-        <span>Display name</span>
-        <input type="text" name="display_name" value="{{ current_user.display_name }}" required>
-      </label>
+    <form method="POST" class="auth-form" data-loading="Saving…">
+      {{ form_error(errors.form) }}
+      {{ field("email", "Email", type="email", value=values.email, error=errors.email, autocomplete="email") }}
+      {{ field("display_name", "Display name", value=values.display_name, error=errors.display_name, maxlength=50) }}
 
-      <hr class="field-divider">
-      <p class="field-hint">Leave the new password fields blank to keep your current password.</p>
+      <fieldset class="field-group">
+        <legend>Change password <small>(optional)</small></legend>
+        {{ field("new_password", "New password", type="password", error=errors.new_password, hint="Leave blank to keep your current password.", autocomplete="new-password", required=false) }}
+        {{ field("confirm_new_password", "Confirm new password", type="password", error=errors.confirm_new_password, autocomplete="new-password", required=false) }}
+      </fieldset>
 
-      <label>
-        <span>New password</span>
-        <input type="password" name="new_password" minlength="8">
-      </label>
-      <label>
-        <span>Confirm new password</span>
-        <input type="password" name="confirm_new_password" minlength="8">
-      </label>
-
-      <hr class="field-divider">
-      <label>
-        <span>Current password <small>(required to save any change)</small></span>
-        <input type="password" name="current_password" required>
-      </label>
-
-      <button type="submit" class="btn-primary">Save changes</button>
+      {{ field("current_password", "Current password", type="password", error=errors.current_password, hint="Required to save any change.", autocomplete="current-password") }}
+      {{ show_password() }}
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Save changes</button>
+        <a class="btn-ghost" href="{{ url_for('index') }}">Back to my tasks</a>
+      </div>
     </form>
   </div>
 {% endblock %}

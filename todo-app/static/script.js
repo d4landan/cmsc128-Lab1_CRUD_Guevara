@@ -1,232 +1,336 @@
-const taskList = document.getElementById("taskList");
-const taskForm = document.getElementById("taskForm");
-const formSubmitBtn = document.getElementById("formSubmitBtn");
-const cancelEditBtn = document.getElementById("cancelEditBtn");
-const emptyState = document.getElementById("emptyState");
-const confirmModal = document.getElementById("confirmModal");
-const toast = document.getElementById("toast");
-const toastMessage = document.getElementById("toastMessage");
-const toastUndoBtn = document.getElementById("toastUndoBtn");
-const todayDateEl = document.getElementById("todayDate");
+// script.js -- the To-Do List page.
+//   1. Elements and state
+//   2. Helpers (escaping, dates, toast, busy buttons)
+//   3. Talking to the server (api)
+//   4. Drawing the list
+//   5. Add / edit
+//   6. Toggle / delete / undo
+//   7. Confirm dialog
+//   8. Start-up
+//
+// The browser never decides who owns what: every request carries the login
+// cookie and the SERVER only returns or changes the logged-in user's own tasks.
 
-let taskToDelete = null;
-let lastDeletedTask = null;
-let undoTimer = null;
-let toastTimer = null;
-let hiddenTaskIds = new Set();
-let currentTasks = [];
+(function () {
+  "use strict";
 
-// Helpers 
+  // ---------------------------------------------------------- 1. elements --
+  const $ = (id) => document.getElementById(id);
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str ?? "";
-  return div.innerHTML;
-}
+  const taskList = $("taskList");
+  const taskForm = $("taskForm");
+  const submitBtn = $("formSubmitBtn");
+  const cancelEditBtn = $("cancelEditBtn");
+  const listStatus = $("listStatus");
+  const modal = $("confirmModal");
+  const toast = $("toast");
+  const toastMessage = $("toastMessage");
+  const toastUndoBtn = $("toastUndoBtn");
 
-function formatDue(value) {
-  const d = new Date(value);
-  if (isNaN(d)) return value;
-  return "Due " + d.toLocaleString(undefined, {
-    month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
-  });
-}
+  const UNDO_SECONDS = 6;
 
-function showToast(message, { undo = false, danger = false, duration = 3500 } = {}) {
-  clearTimeout(toastTimer);
-  toastMessage.textContent = message;
-  toastUndoBtn.classList.toggle("hidden", !undo);
-  toast.classList.toggle("toast-danger", danger);
-  toast.classList.remove("hidden");
-  if (!undo) {
-    toastTimer = setTimeout(() => toast.classList.add("hidden"), duration);
+  let tasks = [];                 // what the server last sent
+  let editingId = null;           // id of the task being edited, or null
+  let hiddenIds = new Set();      // deleted on screen, still inside the undo window
+  let pendingDelete = null;       // { id, timer } while the undo window is open
+  let toastTimer = null;
+  let loadSeq = 0;                // lets a slow, out-of-date response be ignored
+
+  // ----------------------------------------------------------- 2. helpers --
+  function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = value ?? "";
+    return div.innerHTML;
   }
-}
 
-function hideToast() {
-  clearTimeout(toastTimer);
-  toast.classList.add("hidden");
-}
+  function formatDue(value) {
+    const date = new Date(value);
+    if (isNaN(date)) return value;
+    return "Due " + date.toLocaleString(undefined, {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+    });
+  }
 
-if (todayDateEl) {
-  todayDateEl.textContent = new Date().toLocaleDateString(undefined, {
-    weekday: "long", month: "long", day: "numeric"
-  });
-}
+  function showToast(message, { undo = false, danger = false, duration = 3500 } = {}) {
+    clearTimeout(toastTimer);
+    toastMessage.textContent = message;
+    toastUndoBtn.classList.toggle("hidden", !undo);
+    toast.classList.toggle("toast-danger", danger);
+    toast.classList.remove("hidden");
+    if (!undo) toastTimer = setTimeout(hideToast, duration);
+  }
 
-// Data loading
+  function hideToast() {
+    clearTimeout(toastTimer);
+    toast.classList.add("hidden");
+  }
 
-// task requests goes through here 
-async function apiFetch(url, options) {
-  const res = await fetch(url, options);
-  if (res.status === 401) window.location.href = "/login";
-  return res;
-}
+  // Shows "Saving…" and disables the button while `work` runs.
+  async function withBusy(button, busyLabel, work) {
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = busyLabel;
+    try {
+      return await work();
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
 
-function buildQuery() {
-  const tag = document.getElementById("filterTag").value;
-  const priority = document.getElementById("filterPriority").value;
-  const sortBy = document.getElementById("sortBy").value;
-  const params = new URLSearchParams({ sort_by: sortBy });
-  if (tag) params.append("tag", tag);
-  if (priority) params.append("priority", priority);
-  return params.toString();
-}
+  function showStatus(message, retry = false) {
+    listStatus.textContent = message;
+    if (retry) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn-ghost";
+      button.textContent = "Try again";
+      button.addEventListener("click", loadTasks);
+      listStatus.append(" ", button);
+    }
+    listStatus.classList.remove("hidden");
+  }
 
-async function loadTasks() {
-  const res = await apiFetch(`/api/tasks?${buildQuery()}`);
-  if (!res.ok) return;
-  currentTasks = await res.json();
-  renderTasks(currentTasks);
-}
+  const dateEl = $("todayDate");
+  if (dateEl) {
+    dateEl.textContent = new Date().toLocaleDateString(undefined, {
+      weekday: "long", month: "long", day: "numeric"
+    });
+  }
 
-function renderTasks(tasks) {
-  taskList.innerHTML = "";
-  const visible = tasks.filter(task => !hiddenTaskIds.has(task.id));
-
-  emptyState.classList.toggle("hidden", visible.length !== 0);
-
-  visible.forEach(task => {
-    const li = document.createElement("li");
-    li.className = `task-item priority-${(task.priority || "").toLowerCase()} ${task.done ? "done" : ""}`;
-    li.dataset.id = task.id;
-    li.innerHTML = `
-      <button class="check-btn" data-action="toggle" aria-label="${task.done ? "Mark as not done" : "Mark as done"}">${task.done ? "✓" : ""}</button>
-      <div class="task-info">
-        <p class="task-title">${escapeHtml(task.title)}</p>
-        <div class="task-meta">
-          <span class="chip chip-due">${escapeHtml(formatDue(task.due_date))}</span>
-          <span class="chip chip-tag">${escapeHtml(task.tag)}</span>
-        </div>
-      </div>
-      <span class="priority-label"><span class="priority-dot"></span>${escapeHtml(task.priority)}</span>
-      <div class="task-actions">
-        <button class="btn-icon" data-action="edit" aria-label="Edit task">Edit</button>
-        <button class="btn-icon btn-icon-danger" data-action="delete" aria-label="Delete task">Delete</button>
-      </div>
-    `;
-    taskList.appendChild(li);
-  });
-}
-
-// Add / edit 
-
-taskForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const payload = {
-    title: document.getElementById("title").value,
-    due_date: document.getElementById("dueDate").value,
-    priority: document.getElementById("priority").value,
-    tag: document.getElementById("tag").value
-  };
-
-  const isEditing = Boolean(taskForm.dataset.editingId);
-
-  const res = isEditing
-    ? await apiFetch(`/api/tasks/${taskForm.dataset.editingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-    : await apiFetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+  // -------------------------------------------------------- 3. the server --
+  // Every task request goes through here. A 401 means the login is gone (it
+  // expired, or the user logged out in another tab), so go to the login page.
+  async function api(path, { method = "GET", body } = {}) {
+    let response;
+    try {
+      response = await fetch(path, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+        credentials: "same-origin"
       });
-
-  if (!res.ok) {
-    showToast("Couldn't save the task. Please try again.", { danger: true });
-    return;
+    } catch (error) {
+      return { ok: false, status: 0, data: { error: "Can't reach the server. Check your connection." } };
+    }
+    if (response.status === 401) {
+      window.location.href = "/login";
+    }
+    let data = {};
+    try { data = await response.json(); } catch (error) { /* empty body */ }
+    return { ok: response.ok, status: response.status, data };
   }
-  if (isEditing) exitEditMode();
-  showToast(isEditing ? "Task updated" : "Task added");
 
-  taskForm.reset();
-  document.getElementById("priority").value = "Med";
-  loadTasks();
-});
+  // The first problem the server reported, in plain words.
+  function problemText(result, fallback) {
+    const errors = result.data && result.data.errors;
+    return (errors && Object.values(errors)[0]) || (result.data && result.data.error) || fallback;
+  }
 
-function startEdit(id) {
-  const task = currentTasks.find(t => t.id === id);
-  if (!task) return;
-  document.getElementById("title").value = task.title;
-  document.getElementById("dueDate").value = task.due_date;
-  document.getElementById("priority").value = task.priority;
-  document.getElementById("tag").value = task.tag;
-  taskForm.dataset.editingId = id;
-  formSubmitBtn.textContent = "Save changes";
-  cancelEditBtn.classList.remove("hidden");
-  document.getElementById("title").focus();
-}
+  function query() {
+    const params = new URLSearchParams({ sort_by: $("sortBy").value });
+    if ($("filterTag").value) params.append("tag", $("filterTag").value);
+    if ($("filterPriority").value) params.append("priority", $("filterPriority").value);
+    return params.toString();
+  }
 
-function exitEditMode() {
-  delete taskForm.dataset.editingId;
-  formSubmitBtn.textContent = "Add task";
-  cancelEditBtn.classList.add("hidden");
-}
+  async function loadTasks() {
+    const seq = ++loadSeq;
+    const result = await api(`/api/tasks?${query()}`);
+    if (seq !== loadSeq) return;                       // a newer request is already in flight
+    if (!result.ok) {
+      showStatus("We couldn't load your tasks.", true);
+      return;
+    }
+    tasks = result.data;
+    render();
+  }
 
-cancelEditBtn.addEventListener("click", () => {
-  taskForm.reset();
-  exitEditMode();
-});
+  // -------------------------------------------------------- 4. the list --
+  function render() {
+    const visible = tasks.filter((task) => !hiddenIds.has(task.id));
+    taskList.innerHTML = "";
 
-// Toggle / delete
+    if (visible.length === 0) {
+      showStatus($("filterTag").value || $("filterPriority").value
+        ? "No tasks match these filters."
+        : "Nothing here yet. Add your first task above.");
+    } else {
+      listStatus.classList.add("hidden");
+    }
 
-taskList.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-action]");
-  if (!btn) return;
-  const li = e.target.closest("li.task-item");
-  const id = Number(li.dataset.id);
-  const action = btn.dataset.action;
+    visible.forEach((task) => {
+      const li = document.createElement("li");
+      li.className = `task-item priority-${(task.priority || "").toLowerCase()}${task.done ? " done" : ""}`;
+      li.dataset.id = task.id;
+      const name = escapeHtml(task.title);
+      li.innerHTML = `
+        <button type="button" class="check-btn" data-action="toggle" aria-pressed="${task.done ? "true" : "false"}"
+                aria-label="Mark done: ${name}">${task.done ? "✓" : ""}</button>
+        <div class="task-info">
+          <p class="task-title">${name}</p>
+          <div class="task-meta">
+            <span class="chip">${escapeHtml(formatDue(task.due_date))}</span>
+            <span class="chip">${escapeHtml(task.tag)}</span>
+          </div>
+        </div>
+        <span class="priority-label"><span class="priority-dot" aria-hidden="true"></span>${escapeHtml(task.priority)} priority</span>
+        <div class="task-actions">
+          <button type="button" class="btn-icon" data-action="edit" aria-label="Edit task: ${name}">Edit</button>
+          <button type="button" class="btn-icon btn-icon-danger" data-action="delete" aria-label="Delete task: ${name}">Delete</button>
+        </div>`;
+      taskList.appendChild(li);
+    });
+  }
 
-  if (action === "toggle") toggleTask(id);
-  else if (action === "edit") startEdit(id);
-  else if (action === "delete") askDelete(id);
-});
+  // ------------------------------------------------------ 5. add / edit --
+  taskForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const payload = {
+      title: $("title").value,
+      due_date: $("dueDate").value,
+      priority: $("priority").value,
+      tag: $("tag").value
+    };
+    const wasEditing = editingId !== null;
 
-async function toggleTask(id) {
-  await apiFetch(`/api/tasks/${id}/toggle`, { method: "POST" });
-  loadTasks();
-}
+    const result = await withBusy(submitBtn, "Saving…", () =>
+      wasEditing
+        ? api(`/api/tasks/${editingId}`, { method: "PUT", body: payload })
+        : api("/api/tasks", { method: "POST", body: payload })
+    );
 
-function askDelete(id) {
-  taskToDelete = id;
-  confirmModal.classList.remove("hidden");
-}
+    if (!result.ok) {
+      if (result.status === 401) return;
+      if (result.status === 404) {            // e.g. the task was deleted in another tab
+        resetForm();
+        loadTasks();
+      }
+      showToast(problemText(result, "Couldn't save the task. Please try again."), { danger: true });
+      return;
+    }
 
-document.getElementById("cancelDeleteBtn").onclick = () => {
-  confirmModal.classList.add("hidden");
-  taskToDelete = null;
-};
+    resetForm();
+    showToast(wasEditing ? "Task updated" : "Task added");
+    loadTasks();
+  });
 
-document.getElementById("confirmDeleteBtn").onclick = () => {
-  confirmModal.classList.add("hidden");
-  lastDeletedTask = taskToDelete;
+  function resetForm() {
+    taskForm.reset();
+    $("priority").value = "Med";
+    editingId = null;
+    submitBtn.textContent = "Add task";
+    cancelEditBtn.classList.add("hidden");
+  }
 
-  hiddenTaskIds.add(lastDeletedTask);
-  renderTasks(currentTasks);
+  function startEdit(id) {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    $("title").value = task.title;
+    $("dueDate").value = task.due_date;
+    $("priority").value = task.priority;
+    $("tag").value = task.tag;
+    editingId = id;
+    submitBtn.textContent = "Save changes";
+    cancelEditBtn.classList.remove("hidden");
+    $("title").focus();
+  }
 
-  showToast("Task deleted", { undo: true, danger: true });
+  cancelEditBtn.addEventListener("click", resetForm);
 
-  // 8 seconds undo
-  undoTimer = setTimeout(async () => {
-    await apiFetch(`/api/tasks/${lastDeletedTask}`, { method: "DELETE" });
-    hiddenTaskIds.delete(lastDeletedTask);
+  // ------------------------------------------- 6. toggle / delete / undo --
+  taskList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const id = Number(button.closest("li.task-item").dataset.id);
+
+    if (button.dataset.action === "toggle") toggleTask(id);
+    else if (button.dataset.action === "edit") startEdit(id);
+    else if (button.dataset.action === "delete") deleteTask(id);
+  });
+
+  async function toggleTask(id) {
+    const result = await api(`/api/tasks/${id}/toggle`, { method: "POST" });
+    if (!result.ok && result.status !== 401) {
+      showToast(problemText(result, "Couldn't update the task."), { danger: true });
+    }
+    loadTasks();
+  }
+
+  async function deleteTask(id) {
+    if (!(await confirmDialog("Delete this task?", "Delete"))) return;
+
+    await commitPendingDelete();                       // finish an earlier delete still in its undo window
+    hiddenIds.add(id);
+    render();
+    showToast("Task deleted", { undo: true, danger: true });
+    pendingDelete = { id, timer: setTimeout(commitPendingDelete, UNDO_SECONDS * 1000) };
+  }
+
+  // Really deletes the task whose undo window is open (on timeout, or before another delete).
+  async function commitPendingDelete() {
+    if (!pendingDelete) return;
+    const { id, timer } = pendingDelete;
+    pendingDelete = null;
+    clearTimeout(timer);
+    await api(`/api/tasks/${id}`, { method: "DELETE" });
+    hiddenIds.delete(id);
     hideToast();
     loadTasks();
-  }, 8000);
-};
+  }
 
-toastUndoBtn.onclick = () => {
-  clearTimeout(undoTimer);
-  hiddenTaskIds.delete(lastDeletedTask);
-  hideToast();
-  renderTasks(currentTasks);
-  lastDeletedTask = null;
-};
+  toastUndoBtn.addEventListener("click", () => {
+    if (!pendingDelete) return;
+    clearTimeout(pendingDelete.timer);
+    hiddenIds.delete(pendingDelete.id);
+    pendingDelete = null;
+    hideToast();
+    render();
+  });
 
-["filterTag", "filterPriority", "sortBy"].forEach(id =>
-  document.getElementById(id).addEventListener("change", loadTasks)
-);
+  // If the page is closed inside the undo window, still finish the delete.
+  window.addEventListener("pagehide", () => {
+    if (pendingDelete) {
+      fetch(`/api/tasks/${pendingDelete.id}`, { method: "DELETE", keepalive: true });
+    }
+  });
 
-loadTasks();
+  ["filterTag", "filterPriority", "sortBy"].forEach((id) => $(id).addEventListener("change", loadTasks));
+
+  // ------------------------------------------------- 7. confirm dialog --
+  // Returns a Promise<boolean>. Keyboard friendly: focus starts on Cancel (the
+  // safe choice), Tab stays inside the dialog, Escape cancels.
+  function confirmDialog(message, okLabel) {
+    return new Promise((resolve) => {
+      const opener = document.activeElement;
+      const okBtn = $("confirmOkBtn");
+      const cancelBtn = $("confirmCancelBtn");
+      $("confirmMessage").textContent = message;
+      okBtn.textContent = okLabel;
+      modal.classList.remove("hidden");
+      cancelBtn.focus();
+
+      function finish(answer) {
+        modal.classList.add("hidden");
+        document.removeEventListener("keydown", onKey);
+        okBtn.onclick = cancelBtn.onclick = null;
+        if (opener && opener.focus) opener.focus();
+        resolve(answer);
+      }
+      function onKey(event) {
+        if (event.key === "Escape") finish(false);
+        if (event.key === "Tab") {                    // keep focus inside the dialog
+          const first = cancelBtn, last = okBtn;
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+      }
+      document.addEventListener("keydown", onKey);
+      okBtn.onclick = () => finish(true);
+      cancelBtn.onclick = () => finish(false);
+    });
+  }
+
+  // ----------------------------------------------------------- 8. start --
+  loadTasks();
+})();

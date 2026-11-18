@@ -1,28 +1,19 @@
 {% extends "base.html" %}
+{% from "_macros.html" import field, show_password, form_error %}
+{% set errors = errors or {} %}
 {% block title %}Sign up{% endblock %}
 {% block content %}
   <div class="auth-card">
     <h2>Create your account</h2>
     <p class="auth-sub">Already have one? <a href="{{ url_for('auth.login') }}">Log in</a>.</p>
 
-    <form method="POST" class="auth-form" novalidate>
-      <label>
-        <span>Email</span>
-        <input type="email" name="email" value="{{ email or '' }}" required autofocus>
-      </label>
-      <label>
-        <span>Display name</span>
-        <input type="text" name="display_name" value="{{ display_name or '' }}" required>
-      </label>
-      <label>
-        <span>Password</span>
-        <input type="password" name="password" minlength="8" required>
-      </label>
-      <label>
-        <span>Confirm password</span>
-        <input type="password" name="confirm_password" minlength="8" required>
-      </label>
-      <p class="field-hint">At least 8 characters.</p>
+    <form method="POST" class="auth-form" data-loading="Creating account…">
+      {{ form_error(errors.form) }}
+      {{ field("email", "Email", type="email", value=email, error=errors.email, autocomplete="email", autofocus=true) }}
+      {{ field("display_name", "Display name", value=display_name, error=errors.display_name, autocomplete="nickname", maxlength=50) }}
+      {{ field("password", "Password", type="password", error=errors.password, hint="At least 8 characters.", autocomplete="new-password", minlength=8) }}
+      {{ field("confirm_password", "Confirm password", type="password", error=errors.confirm_password, autocomplete="new-password") }}
+      {{ show_password() }}
       <button type="submit" class="btn-primary">Create account</button>
     </form>
   </div>
